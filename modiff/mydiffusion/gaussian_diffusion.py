@@ -165,6 +165,9 @@ class GaussianDiffusion:
         self.posterior_mean_coef1 = betas * np.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         self.posterior_mean_coef2 = (1.0 - self.alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - self.alphas_cumprod)
 
+        # snr weights
+        self.snr = self.alphas_cumprod / (1.0 - self.alphas_cumprod)
+
     def q_mean_variance(self, x_start, t):
         """
         Get the distribution q(x_t | x_0).
@@ -336,7 +339,8 @@ class GaussianDiffusion:
 
         This uses the conditioning strategy from Sohl-Dickstein et al. (2015).
         """
-        gradient = cond_fn(x, self._scale_timesteps(t), **model_kwargs)
+        # gradient = cond_fn(x, self._scale_timesteps(t), **model_kwargs)
+        gradient = cond_fn(x, self._scale_timesteps(t), p_mean_var=p_mean_var, **model_kwargs)
         new_mean = p_mean_var["mean"].float() + p_mean_var["variance"] * gradient.float()
         return new_mean
 

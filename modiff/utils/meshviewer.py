@@ -73,6 +73,105 @@ def step_callback(pyrender_viewer, mesh_viewer, step_size):
     mesh_viewer.animation_frame_idx = (mesh_viewer.animation_frame_idx + step_size) % mesh_viewer.animation_len
 
 
+def get_checkerboard_floor(
+    cam_up,
+    length=25.0,
+    tile_width=0.5,
+    color0=[0.8, 0.9, 0.9],
+    color1=[0.6, 0.7, 0.7],
+):
+    """
+    Creates a trimesh object for a checkerboard floor.
+
+    The floor is initially created on the XY plane (normal is [0,0,1]) and then
+    rotated so that its normal aligns with the provided `cam_up` vector.
+
+    Args:
+        cam_up (list or np.ndarray): The "up" vector of the camera, which
+            defines the normal of the floor plane. E.g., [0, 1, 0] for a
+            floor on the XZ plane.
+        length (float): The total side length of the checkerboard floor.
+        tile_width (float): The side length of a single tile.
+        color0 (list): The RGB color of the first set of tiles.
+        color1 (list): The RGB color of the second set of tiles.
+
+    Returns:
+        trimesh.Trimesh: A mesh object representing the checkerboard floor.
+    """
+    # Ensure cam_up is a normalized numpy array
+    cam_up = np.array(cam_up, dtype=np.float64)
+    cam_up /= np.linalg.norm(cam_up)
+
+    # Convert colors to RGBA for trimesh
+    color0 = np.array(color0 + [1.0]) * 255
+    color1 = np.array(color1 + [1.0]) * 255
+
+    # Create the checkerboard on the XY plane (Z-up)
+    num_tiles = int(length / tile_width)
+    radius = length / 2.0
+
+    vertices = []
+    faces = []
+    face_colors = []
+
+    # Generate tiles
+    for i in range(num_tiles):
+        for j in range(num_tiles):
+            # Position of the bottom-left corner of the tile
+            start_loc = np.array([-radius + j * tile_width, -radius + i * tile_width, 0.0])
+
+            # Vertices of the current tile (quad)
+            cur_verts = np.array(
+                [
+                    start_loc,
+                    start_loc + [tile_width, 0, 0],
+                    start_loc + [tile_width, tile_width, 0],
+                    start_loc + [0, tile_width, 0],
+                ]
+            )
+
+            # Faces for the quad (two triangles)
+            base_index = 4 * (i * num_tiles + j)
+            cur_faces = np.array(
+                [[base_index, base_index + 1, base_index + 2], [base_index, base_index + 2, base_index + 3]],
+                dtype=np.int32,
+            )
+
+            # Determine the color of the tile
+            use_color0 = (i + j) % 2 == 0
+            cur_color = color0 if use_color0 else color1
+            cur_face_colors = np.array([cur_color, cur_color])
+
+            vertices.append(cur_verts)
+            faces.append(cur_faces)
+            face_colors.append(cur_face_colors)
+
+    # Combine all parts into single numpy arrays
+    vertices = np.concatenate(vertices, axis=0)
+    faces = np.concatenate(faces, axis=0)
+    face_colors = np.concatenate(face_colors, axis=0)
+    face_colors = face_colors.astype(np.uint8)
+
+    # Create the initial Trimesh object
+    floor = trimesh.Trimesh(
+        vertices=vertices,
+        faces=faces,
+        face_colors=face_colors,
+        process=False,  # Important to avoid unintended processing
+    )
+
+    # The mesh is currently on the XY plane, with a normal of [0, 0, 1].
+    # We need to rotate it to align with the `cam_up` vector.
+    # `trimesh.geometry.align_vectors` computes the necessary transform.
+    initial_normal = np.array([0.0, 0.0, 1.0])
+    transform = trimesh.geometry.align_vectors(initial_normal, cam_up)
+
+    # Apply the transformation
+    floor.apply_transform(transform)
+
+    return floor
+
+
 class MeshViewer(object):
     def __init__(
         self,
@@ -160,13 +259,15 @@ class MeshViewer(object):
             )
 
         if add_floor:
-            floor = trimesh.creation.box(10 * (1.001 - np.array(cam_up)))
-            floor = trimesh.Trimesh(
-                vertices=floor.vertices,
-                faces=floor.faces,
-                vertex_colors=floor.visual.vertex_colors,
-            )
-            self.add_static_meshes([floor])
+            # floor = trimesh.creation.box(10 * (1.001 - np.array(cam_up)))
+            # floor = trimesh.Trimesh(
+            #     vertices=floor.vertices,
+            #     faces=floor.faces,
+            #     vertex_colors=floor.visual.vertex_colors,
+            # )
+            floor = get_checkerboard_floor(cam_up)
+            # floor.export("/vision/u/chpatel/test/floor.ply")
+            self.add_static_meshes([floor], smooth=False)
 
         if add_axis:
             axs = trimesh.creation.axis()
@@ -258,7 +359,7 @@ class MeshViewer(object):
     # ----------------------------------------------
     # Static meshes
     # ----------------------------------------------
-    def set_meshes(self, meshes, group_name="static", remove_old=False):
+    def set_meshes(self, meshes, group_name="static", remove_old=False, smooth=True):
         """Add a list of static meshes to the scene."""
         if remove_old:
             for node in self.scene.get_nodes():
@@ -267,7 +368,7 @@ class MeshViewer(object):
 
         for mid, mesh in enumerate(meshes):
             if isinstance(mesh, trimesh.Trimesh):
-                mesh = pyrender.Mesh.from_trimesh(mesh.copy())
+                mesh = pyrender.Mesh.from_trimesh(mesh.copy(), smooth=smooth)
             self.acquire_render_lock()
             self.scene.add(mesh, "%s-mesh-%2d" % (group_name, mid))
             self.release_render_lock()
@@ -275,8 +376,8 @@ class MeshViewer(object):
     def set_static_meshes(self, meshes):
         self.set_meshes(meshes, group_name="static", remove_old=True)
 
-    def add_static_meshes(self, meshes):
-        self.set_meshes(meshes, group_name="staticadd", remove_old=False)
+    def add_static_meshes(self, meshes, smooth=True):
+        self.set_meshes(meshes, group_name="staticadd", remove_old=False, smooth=smooth)
 
     # ----------------------------------------------
     # Animation assets
@@ -376,8 +477,8 @@ class MeshViewer(object):
 
     def render(self):
         """Render into an array."""
-        # flags = RenderFlags.SHADOWS_DIRECTIONAL
         flags = RenderFlags.NONE
+        flags |= RenderFlags.SHADOWS_DIRECTIONAL
         flags |= RenderFlags.SKIP_CULL_FACES
         if self.render_RGBA:
             flags |= RenderFlags.RGBA

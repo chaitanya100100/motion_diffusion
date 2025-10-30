@@ -1,4 +1,5 @@
 import os
+import copy
 import pytorch_lightning as pl
 import torch
 import torch.distributed
@@ -6,12 +7,13 @@ from loguru import logger
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 
 from modiff.model.uniegomotion import UniEgoMotion
-from modiff.model.motion_lstm import Motion_LSTM
-from modiff.model.motion_unet import Motion_Unet
+from modiff.model.uniegomotion_basic import UniEgoMotionBasic
+from modiff.model.uniegomotion_basic_latentcond import UniEgoMotionBasicLatentCond, MotionEncoder
 
 from modiff.module.utils import cfg_to_dict, create_gaussian_diffusion
 from modiff.mydiffusion.resample import create_named_schedule_sampler
 from modiff.mydiffusion.gaussian_diffusion import sum_flat
+from modiff.dataset.normalizer import Normalizer
 
 
 class UEM_Module(pl.LightningModule):
@@ -26,20 +28,17 @@ class UEM_Module(pl.LightningModule):
         self.learn_traj = cfg.MODEL.LEARN_TRAJ
         if self.learn_traj:
             assert not self.cfg.DATA.COND_TRAJ
+        self.normalizer = Normalizer(cfg)
 
-        self.is_lstm = False
         if self.model_name == "uem":
             self.model = UniEgoMotion(self.cfg)
-        elif self.model_name == "lstm":
-            self.model = Motion_LSTM(self.cfg)
-            self.is_lstm = True
-        elif self.model_name == "unet":
-            self.model = Motion_Unet(self.cfg)
+        elif self.model_name == "uem_basic" or self.model_name == "uem_unet":
+            self.model = UniEgoMotionBasic(self.cfg)
+        elif self.model_name == "uem_basic_latentcond":
+            self.model = UniEgoMotionBasicLatentCond(self.cfg)
+            self.motion_encoder = MotionEncoder(self.cfg)
         else:
             raise ValueError(f"Unknown model name {self.model_name}")
-
-        if self.is_lstm:
-            return
 
         self.diffusion = create_gaussian_diffusion(cfg)
 
@@ -80,22 +79,15 @@ class UEM_Module(pl.LightningModule):
             g["weight_decay"] = self.cfg.TRAIN.WEIGHT_DECAY
 
     def training_step(self, batch, batch_idx, mode="train"):
-        if self.is_lstm:
-            x = batch["misc"]["traj"] if self.learn_traj else batch["misc"]["motion"]
-            y = batch["y"]
-            pred_x = self.model(x.clone(), y)
-            target = x
 
-            mask = y["valid_frames"]
-            mask = mask.view(list(mask.shape) + [1] * (x.ndim - mask.ndim))
-            mask = mask.expand_as(target)
-            loss_here = sum_flat(((target - pred_x) * mask) ** 2)
-            denom = sum_flat(mask)
-            loss = (loss_here / denom).mean()
-            self.log(f"{mode}/loss", loss, on_step=True, on_epoch=True, sync_dist=True, batch_size=x.shape[0])
-            return loss
-
+        if "traj" in batch["y"]:
+            batch["y"]["traj"] = self.normalizer.normalize(batch["y"]["traj"], "traj")
         x = batch["misc"]["traj"] if self.learn_traj else batch["misc"]["motion"]
+        x = self.normalizer.normalize(x, None)
+
+        if self.model_name == "uem_basic_latentcond":
+            batch["y"]["semcode"] = self.motion_encoder(x, batch["y"]["valid_frames"])
+
         t, weights = self.schedule_sampler.sample(x.shape[0], self.device)
         losses = self.diffusion.training_losses(self.model, x, t, model_kwargs={"y": batch["y"]})
         if mode == "train" and self.schedule_sampler_type != "uniform":
@@ -127,11 +119,11 @@ class UEM_Module(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         return self.training_step(batch, batch_idx, mode="val")
 
-    def sample(self, y, B=1, cond_scale=None, return_all_pred_xstart=False):
-        if self.is_lstm:
-            x = torch.zeros(B, self.window, self.model.input_feats, device=self.device)
-            x = self.model(x, y)
-            return x
+    def sample(self, y, B=1, cond_scale=None, return_all_pred_xstart=False, cond_fn=None):
+
+        y = copy.deepcopy(y)
+        if "traj" in y:
+            y["traj"] = self.normalizer.normalize(y["traj"], "traj")
 
         # B = y["traj"].shape[0]
         for k, v in y.items():
@@ -143,6 +135,7 @@ class UEM_Module(pl.LightningModule):
             clip_denoised=False,
             noise=None,
             progress=False,
+            cond_fn=cond_fn,
             # skip_timesteps=0,  # 0 is the default value - i.e. don't skip any step
             # init_image=None,
             # dump_steps=None,
@@ -150,8 +143,29 @@ class UEM_Module(pl.LightningModule):
             return_all_pred_xstart=return_all_pred_xstart,
         )
         if return_all_pred_xstart:
+            x[0] = self.normalizer.denormalize(x[0], None)
+            x[1] = [self.normalizer.denormalize(s, None) for s in x[1]]
             return x[0], x[1]  # final sample, all predicted xstart
-        return x
+        else:
+            x = self.normalizer.denormalize(x, None)
+            return x
+
+    @classmethod
+    def from_pretrained(cls, exp_path):
+        from modiff.config.defaults import get_cfg_defaults
+
+        cfg = get_cfg_defaults()
+        cfg_fpath = os.path.join(exp_path, "hparams.yaml")
+        assert os.path.exists(cfg_fpath), f"Config file {cfg_fpath} does not exist"
+        cfg.merge_from_file(cfg_fpath)
+        cfg.freeze()
+
+        ckpt_path = os.path.join(exp_path, "last.ckpt")
+        assert os.path.exists(ckpt_path), f"Checkpoint path {ckpt_path} does not exist"
+        logger.info(f"Loading model from {ckpt_path}")
+        model = cls.load_from_checkpoint(ckpt_path, cfg=cfg, map_location="cpu").eval()
+
+        return model, cfg
 
 
 class UEM_Module_TwoStage(pl.LightningModule):

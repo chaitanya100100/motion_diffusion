@@ -2,7 +2,7 @@ import torch
 import copy
 import numpy as np
 import modiff.utils.rotation_conversions as rc
-from modiff.utils.pca_conversions import pca_to_matrix
+from modiff.dataset.smpl_utils import saved_sequence_to_full_sequence, pca_to_matrix, matrix_to_pca
 
 
 def quaternion_between_vectors(v1, v2):
@@ -107,6 +107,9 @@ def canonicalize_trajectory(aria_traj, smpl_params, kp3d):
     tsfm_T = rot_trans_to_matrix(tsfm_rot, tsfm_trans)  # 4 x 4
     can_aria_traj = tsfm_T[None] @ aria_traj  # T x 4 x 4
 
+    if smpl_params is None:
+        return can_aria_traj
+
     # global orient is NOT defined at the origin but pelvis joint i.e. kp3d[:, 0]
     # in canonical pose which depends on shape. So there is this extra transformation
     # that we need to take care of. This makes the canonicalization a bit more complicated.
@@ -161,8 +164,6 @@ def get_a_canonicalized_segment(smpl_params, aria_traj, kp3d, smpl, start_idx, e
     body_root_offset = can_kp3d[0, 0] - can_smpl_params["transl"][0]  # 3
 
     data_dict = {
-        "start_idx": start_idx * 3,
-        "end_idx": end_idx * 3,
         "can_aria_traj": can_aria_traj,
         "can_smpl_params": can_smpl_params,
         "can_kp3d": can_kp3d[:, :76],  # only body and hands
@@ -173,21 +174,7 @@ def get_a_canonicalized_segment(smpl_params, aria_traj, kp3d, smpl, start_idx, e
     return data_dict
 
 
-def saved_sequence_to_full_sequence(aria_traj, smpl_params, smpl):
-    # Saved smpl params are in in 6D rotation format and body shape is not repeated for all frames.
-    # Convert them to full sequence format for easier use.
+if __name__ == "__main__":
+    import IPython
 
-    aria_traj_T = torch.eye(4)[None].repeat(aria_traj.shape[0], 1, 1).to(aria_traj.device)
-    aria_traj_T[:, :3, :3] = rc.rotation_6d_to_matrix(aria_traj[:, :6])
-    aria_traj_T[:, :3, 3] = aria_traj[:, 6:9]
-
-    ret_smpl_params = {}
-    ret_smpl_params["global_orient"] = rc.rotation_6d_to_matrix(smpl_params["global_orient"])
-    ret_smpl_params["body_pose"] = rc.rotation_6d_to_matrix(smpl_params["body_pose"])
-    ret_smpl_params["betas"] = smpl_params["betas"].repeat(aria_traj.shape[0], 1)
-    ret_smpl_params["transl"] = smpl_params["transl"].clone()
-    if "left_hand_pose" in smpl_params:
-        ret_smpl_params["left_hand_pose"] = pca_to_matrix(smpl_params["left_hand_pose"], smpl.left_hand_components)
-        ret_smpl_params["right_hand_pose"] = pca_to_matrix(smpl_params["right_hand_pose"], smpl.right_hand_components)
-
-    return aria_traj_T, ret_smpl_params
+    IPython.embed()

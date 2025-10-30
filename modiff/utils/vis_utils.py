@@ -5,6 +5,7 @@ import cv2
 import tempfile
 from tqdm.auto import tqdm
 import torch
+import subprocess
 
 from .torch_utils import to_numpy
 from .meshviewer import MeshViewer
@@ -30,7 +31,7 @@ def visualize_sequence(
         height=1080,
         use_offscreen=True,
         # cam_pos=center + np.array([-3, -3, 1]),
-        cam_pos=center + np.array([-2, -7, 1]),
+        cam_pos=center + np.array([-2, -4, 1]),
         cam_lookat=center + np.array([0, 0, 1]),
         cam_up=[0.0, 0.0, 1.0],
         add_axis=True,
@@ -70,7 +71,8 @@ def visualize_sequence(
         faces = to_numpy(faces)
         for v in verts:
             ms = trimesh.Trimesh(vertices=v - offset, faces=faces)
-            # ms.visual.vertex_colors[:, -1] = 128
+            if global_jpos is not None:
+                ms.visual.vertex_colors[:, -1] = 128
             ms.visual.vertex_colors[:, :-1] = default_color[None, :]
             mesh_seq.append(ms)
         mv.add_mesh_seq(mesh_seq)
@@ -82,7 +84,8 @@ def visualize_sequence(
         faces = to_numpy(faces)
         for pv in pred_verts:
             ms = trimesh.Trimesh(vertices=pv - offset, faces=faces)
-            # ms.visual.vertex_colors[:, -1] = 128
+            if pred_global_jpos is not None:
+                ms.visual.vertex_colors[:, -1] = 128
             ms.visual.vertex_colors[:, :-1] = pred_color[None, :]
             pred_mesh_seq.append(ms)
         mv.add_mesh_seq(pred_mesh_seq)
@@ -111,7 +114,7 @@ def visualize_sequence(
                 tsfm = np.eye(4)
                 tsfm[:3, :3] = global_rotmat[j, i]
                 tsfm[:3, 3] = global_jpos[j, i]
-                ms = trimesh.creation.axis(axis_length=0.2).apply_transform(tsfm)
+                ms = trimesh.creation.axis(axis_length=0.1).apply_transform(tsfm)
                 ms = trimesh.Trimesh(
                     vertices=ms.vertices - offset, faces=ms.faces, vertex_colors=ms.visual.vertex_colors
                 )
@@ -304,7 +307,24 @@ def save_video(images, video_name, out_dir, fps=30):
         for i, img in enumerate(images):
             cv2.imwrite(f"{tmpdir}/{i:06d}.jpg", img)
         cmd = f"ffmpeg -y -framerate {fps} -pattern_type glob -i '{tmpdir}/*.jpg' -c:v libx264 -pix_fmt yuv420p '{out_dir}/{video_name}.mp4'"
-        os.system(cmd)
+        # os.system(cmd)
+
+        try:
+            # Execute the command, capture stdout and stderr, and check for errors
+            result = subprocess.run(
+                cmd,
+                shell=True,  # Set to True if the command requires shell features (like pipes, wildcards)
+                capture_output=True,
+                text=True,  # Decode output as text (UTF-8 by default)
+                check=True,  # Raise CalledProcessError if the command returns a non-zero exit status
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing command: {e}")
+            print("Stderr output:")
+            print(e.stderr)
+            print("Stdout output:")
+            print(e.stdout)
+
     print(f"Created {video_name}.mp4")
 
     # H, W, C = images.shape[1:]

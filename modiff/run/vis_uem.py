@@ -1,6 +1,7 @@
 import copy
 import os
 import sys
+import copy
 
 import numpy as np
 import pytorch_lightning as pl
@@ -8,9 +9,8 @@ import torch
 from loguru import logger
 
 from modiff.config.defaults import get_cfg
-from modiff.dataset.ee4d_motion_dataset import careful_collate_fn
-from modiff.dataset.ee4d_motion_dataset import EE4D_Motion_Dataset
-from modiff.dataset.amass_motion_dataset import AMASS_Motion_Dataset
+from modiff.utils.torch_utils import careful_collate_fn
+from modiff.dataset.motion_dataset import Motion_Dataset
 from modiff.module.uem_module import UEM_Module, UEM_Module_TwoStage
 from modiff.utils.torch_utils import to_device
 from modiff.utils.vis_utils import (
@@ -58,9 +58,9 @@ def main():
 
     for split in ["val"]:
         # Dataset
-        ds = {"ee4d": EE4D_Motion_Dataset, "amass": AMASS_Motion_Dataset}[cfg.DATA.DATASET_NAME](split=split, cfg=cfg)
+        ds = Motion_Dataset(split=split, cfg=cfg)
 
-        seq_names = np.random.choice(ds.seq_names, size=10, replace=False)
+        seq_names = np.random.choice(ds.seq_names, size=30, replace=False)
         examples = {("recon", seq_name, 0) for seq_name in seq_names}
 
         for task, seq_name, start_idx in examples:
@@ -71,33 +71,35 @@ def main():
                     with torch.inference_mode():
                         idx = 0  # Used as bookkeeping during training. Not important here.
                         sample = ds.get_from_seq_and_st(seq_name, start_idx, idx)
-                        # Mask appropriately for task
-                        pred_sample = ds.process_sample_for_task(sample, task)
-
                         batch = careful_collate_fn([sample])
-                        pred_batch = careful_collate_fn([pred_sample])
-                        y = to_device(pred_batch["y"], device)
+                        y = to_device(batch["y"], device)
 
                         # Sample motion
                         x = model.sample(y, 1, cond_scale=cfg.TRAIN.COND_SCALE)
                         if not is_twostage:
                             if cfg.MODEL.LEARN_TRAJ:
-                                pred_batch["pred"]["traj"] = to_device(x, "cpu")
+                                batch["pred"]["traj"] = to_device(x, "cpu")
                             else:
-                                pred_batch["pred"]["motion"] = to_device(x, "cpu")
+                                batch["pred"]["motion"] = to_device(x, "cpu")
                         else:
-                            pred_batch["pred"]["traj"] = to_device(x[0], "cpu")
-                            pred_batch["pred"]["motion"] = to_device(x[1], "cpu")
+                            batch["pred"]["traj"] = to_device(x[0], "cpu")
+                            batch["pred"]["motion"] = to_device(x[1], "cpu")
 
                     # Process prediction to get full motion sequence
-                    gt_mdata = ds.ret_to_full_sequence(batch)
-                    pred_mdata = ds.ret_to_full_sequence(pred_batch)
+                    gt_mdata = ds.repre_to_sequence(
+                        batch["misc"]["motion"], batch["misc"]["traj"], batch["y"]["valid_frames"]
+                    )
+                    pred_mdata = ds.repre_to_sequence(
+                        batch["pred"]["motion"] if "motion" in batch["pred"] else batch["misc"]["motion"],
+                        batch["pred"]["traj"] if "traj" in batch["pred"] else batch["misc"]["traj"],
+                        batch["y"]["valid_frames"],
+                    )
 
                     gt_aria_traj_T = gt_mdata["aria_traj_T"][0]
-                    gt_smpl_params = gt_mdata["smpl_params_full"][0]
+                    gt_smpl_params = gt_mdata["smpl_params"][0]
                     nf_gt = len(gt_smpl_params["global_orient"])
 
-                    pred_smpl_params = pred_mdata["smpl_params_full"][0]
+                    pred_smpl_params = pred_mdata["smpl_params"][0]
                     nf_pred = len(pred_smpl_params["global_orient"])
 
                     _, pred_verts, _ = evaluate_smpl(smpl, pred_smpl_params)

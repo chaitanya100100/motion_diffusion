@@ -3,7 +3,6 @@ from yacs.config import CfgNode as CN
 _C = CN()
 
 _C.DATA = CN()
-_C.DATA.DATA_DIR = "/vision/group/egoexo4d/"
 _C.DATA.DATASET_NAME = None
 _C.DATA.BATCH_SIZE = 32
 _C.DATA.NUM_WORKERS = 4
@@ -29,6 +28,7 @@ _C.MODEL.LSTM_TYPE = "gen"  # ["gen", "fore"]. If model is lstm, this specifies 
 _C.MODEL.FINETUNE_TYPE = None
 _C.MODEL.ZERO_MASK_TOKEN = False  # whether to use zero mask token instead of a learnable one.
 _C.MODEL.MODEL_SIZE = "large"  # ["large", "small"]
+_C.MODEL.SEMCODE_DIM = 128
 
 _C.TRAIN = CN()
 _C.TRAIN.LR = 3.0e-5

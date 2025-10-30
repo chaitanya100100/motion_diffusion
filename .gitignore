@@ -6,3 +6,4 @@ exp/
 jnb/
 .vscode/
 *.egg-info/
+test/

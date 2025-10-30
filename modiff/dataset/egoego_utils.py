@@ -45,14 +45,11 @@ DISCARD_SHORTER_THAN = 1.0  # seconds
 VIZ_PLOTS = False
 VIZ_SEQ = False
 
-OUT_FPS = 10
-# OUT_FPS = 20
-
 # for determining floor height
-FLOOR_VEL_THRESH = 0.005 * (30 / OUT_FPS)
+FLOOR_VEL_THRESH = 0.005
 FLOOR_HEIGHT_OFFSET = 0.01
 # for determining contacts
-CONTACT_VEL_THRESH = 0.005 * (30 / OUT_FPS)
+CONTACT_VEL_THRESH = 0.005
 CONTACT_TOE_HEIGHT_THRESH = 0.04
 CONTACT_ANKLE_HEIGHT_THRESH = 0.08
 # for determining terrain interaction
@@ -138,7 +135,9 @@ def determine_floor_height_and_contacts(body_joint_seq, fps):
     Contacts are N x 4 where N is number of frames and each row is left heel/toe, right heel/toe
     """
     num_frames = body_joint_seq.shape[0]
-    assert fps == OUT_FPS
+    # humor threshold was independent of fps but most of the sequences are at 120 fps
+    # we process it at lower fps so we need to scale the threshold
+    vel_thresh_mult = 120 / fps
 
     # compute toe velocities
     root_seq = body_joint_seq[:, SMPL_JOINTS["hips"], :]
@@ -175,10 +174,10 @@ def determine_floor_height_and_contacts(body_joint_seq, fps):
 
     # filter out heights when velocity is greater than some threshold (not in contact)
     all_inds = np.arange(left_toe_heights.shape[0])
-    left_static_foot_heights = left_toe_heights[left_toe_vel < FLOOR_VEL_THRESH]
-    left_static_inds = all_inds[left_toe_vel < FLOOR_VEL_THRESH]
-    right_static_foot_heights = right_toe_heights[right_toe_vel < FLOOR_VEL_THRESH]
-    right_static_inds = all_inds[right_toe_vel < FLOOR_VEL_THRESH]
+    left_static_foot_heights = left_toe_heights[left_toe_vel < FLOOR_VEL_THRESH * vel_thresh_mult]
+    left_static_inds = all_inds[left_toe_vel < FLOOR_VEL_THRESH * vel_thresh_mult]
+    right_static_foot_heights = right_toe_heights[right_toe_vel < FLOOR_VEL_THRESH * vel_thresh_mult]
+    right_static_inds = all_inds[right_toe_vel < FLOOR_VEL_THRESH * vel_thresh_mult]
 
     all_static_foot_heights = np.append(left_static_foot_heights, right_static_foot_heights)
     all_static_inds = np.append(left_static_inds, right_static_inds)
@@ -253,7 +252,7 @@ def determine_floor_height_and_contacts(body_joint_seq, fps):
                 cluster_size_above_thresh = cluster_size > int(CLUSTER_SIZE_THRESH * fps)
                 if root_above_thresh and toe_above_thresh and cluster_size_above_thresh:
                     discard_seq = True
-                    print("DISCARDING sequence based on terrain interaction!")
+                    # print("DISCARDING sequence based on terrain interaction!")
                     break
     else:
         floor_height = offset_floor_height = 0.0
@@ -267,10 +266,10 @@ def determine_floor_height_and_contacts(body_joint_seq, fps):
     right_heel_vel = np.linalg.norm(right_heel_seq[1:] - right_heel_seq[:-1], axis=1)
     right_heel_vel = np.append(right_heel_vel, right_heel_vel[-1])
 
-    left_heel_contact = left_heel_vel < CONTACT_VEL_THRESH
-    right_heel_contact = right_heel_vel < CONTACT_VEL_THRESH
-    left_toe_contact = left_toe_vel < CONTACT_VEL_THRESH
-    right_toe_contact = right_toe_vel < CONTACT_VEL_THRESH
+    left_heel_contact = left_heel_vel < CONTACT_VEL_THRESH * vel_thresh_mult
+    right_heel_contact = right_heel_vel < CONTACT_VEL_THRESH * vel_thresh_mult
+    left_toe_contact = left_toe_vel < CONTACT_VEL_THRESH * vel_thresh_mult
+    right_toe_contact = right_toe_vel < CONTACT_VEL_THRESH * vel_thresh_mult
 
     # compute heel heights
     left_heel_heights = left_heel_seq[:, 2] - floor_height
@@ -291,20 +290,20 @@ def determine_floor_height_and_contacts(body_joint_seq, fps):
 
     # hand contacts
     left_hand_contact = detect_joint_contact(
-        body_joint_seq, "leftHand", floor_height, CONTACT_VEL_THRESH, CONTACT_ANKLE_HEIGHT_THRESH
+        body_joint_seq, "leftHand", floor_height, CONTACT_VEL_THRESH * vel_thresh_mult, CONTACT_ANKLE_HEIGHT_THRESH
     )
     right_hand_contact = detect_joint_contact(
-        body_joint_seq, "rightHand", floor_height, CONTACT_VEL_THRESH, CONTACT_ANKLE_HEIGHT_THRESH
+        body_joint_seq, "rightHand", floor_height, CONTACT_VEL_THRESH * vel_thresh_mult, CONTACT_ANKLE_HEIGHT_THRESH
     )
     contacts[:, SMPL_JOINTS["leftHand"]] = left_hand_contact
     contacts[:, SMPL_JOINTS["rightHand"]] = right_hand_contact
 
     # knee contacts
     left_knee_contact = detect_joint_contact(
-        body_joint_seq, "leftLeg", floor_height, CONTACT_VEL_THRESH, CONTACT_ANKLE_HEIGHT_THRESH
+        body_joint_seq, "leftLeg", floor_height, CONTACT_VEL_THRESH * vel_thresh_mult, CONTACT_ANKLE_HEIGHT_THRESH
     )
     right_knee_contact = detect_joint_contact(
-        body_joint_seq, "rightLeg", floor_height, CONTACT_VEL_THRESH, CONTACT_ANKLE_HEIGHT_THRESH
+        body_joint_seq, "rightLeg", floor_height, CONTACT_VEL_THRESH * vel_thresh_mult, CONTACT_ANKLE_HEIGHT_THRESH
     )
     contacts[:, SMPL_JOINTS["leftLeg"]] = left_knee_contact
     contacts[:, SMPL_JOINTS["rightLeg"]] = right_knee_contact

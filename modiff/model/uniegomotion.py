@@ -26,6 +26,7 @@ class UniEgoMotion(nn.Module):
         cfg,
         dropout=0.1,
     ):
+        raise NotImplementedError("UniEgoMotion is deprecated. Use UniEgoMotionBasic instead.")
         super().__init__()
 
         self.cfg = cfg
@@ -52,8 +53,8 @@ class UniEgoMotion(nn.Module):
             logger.warning(f"Using finetune type {self.finetune_type}.")
 
         self.repre_type = cfg.DATA.REPRE_TYPE
-        self.input_feats = {"v1_beta": 234, "v4_beta": 243, "v5_beta": 243}[self.repre_type]
-        traj_dim = {"v1_beta": 9, "v4_beta": 18, "v5_beta": 18}[self.repre_type]
+        self.input_feats = {"v1_ait": 209, "v1_beta": 234, "v4_beta": 243, "v5_beta": 243}[self.repre_type]
+        traj_dim = {"v1_ait": 9, "v1_beta": 9, "v4_beta": 18, "v5_beta": 18}[self.repre_type]
         self.latent_dim = latent_dim
 
         if cfg.MODEL.LEARN_TRAJ:
@@ -113,7 +114,7 @@ class UniEgoMotion(nn.Module):
             )
 
         if self.encoder_tsfm is not None:
-            assert self.encoder_tsfm in ["add"]
+            assert self.encoder_tsfm in ["add", "concat"]
             logger.warning("Using encoder.")
             self.tsfm = nn.ModuleList(
                 [EncoderBlock(self.latent_dim, self.num_heads, self.dropout, 2) for _ in range(self.num_layers)]
@@ -217,6 +218,9 @@ class UniEgoMotion(nn.Module):
         timesteps: B
         y: dict
         """
+        if "valid_frames" not in y:
+            y["valid_frames"] = torch.ones_like(x[:, :, 0])  # B x T
+
         if cond_scale is not None:
             assert diffusion is not None
             x_cond = self.forward(x, timesteps, y)  # conditional output
@@ -267,8 +271,11 @@ class UniEgoMotion(nn.Module):
             enc_imgs = self.pos_enc_and_process_img_feat(x, enc_imgs)
             enc_img_mask = y["valid_frames"]
 
-            all_cond.append(enc_imgs)
-            all_cond_mask.append(enc_img_mask)
+            if self.encoder_tsfm == "concat" and not self.cond_img_feat:
+                pass
+            else:
+                all_cond.append(enc_imgs)
+                all_cond_mask.append(enc_img_mask)
 
         x = torch.cat((enc_time[:, None], x), axis=1)  # B x (T+1) x D
         mask = y["valid_frames"]  # B x T where valid are 1
@@ -282,6 +289,9 @@ class UniEgoMotion(nn.Module):
         if self.encoder_tsfm:
             if self.encoder_tsfm == "add":
                 x = x + context
+            elif self.encoder_tsfm == "concat":
+                x = torch.cat((x, context), dim=1)
+                mask = torch.cat((mask, context_mask), dim=-1)
             else:
                 raise ValueError(f"encoder_tsfm is {self.encoder_tsfm}")
 
