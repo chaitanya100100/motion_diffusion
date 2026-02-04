@@ -66,6 +66,7 @@ class UniEgoMotionBasic(nn.Module):
         # self.cond_mask_prob = cond_mask_prob
         self.cond_mask_prob = {
             "traj": 0.1,
+            "text": 0.1,
         }
 
         self.input_process = nn.Linear(self.input_feats, self.latent_dim)
@@ -78,6 +79,10 @@ class UniEgoMotionBasic(nn.Module):
                 "traj": nn.Parameter(torch.randn(self.latent_dim) * 0.05),
             }
         )
+
+        if self.cfg.DATA.COND_TEXT_FEAT:
+            self.embed_text_cond = nn.Linear(512, self.latent_dim)
+            self.mask_tokens["text"] = nn.Parameter(torch.randn(self.latent_dim) * 0.05)
 
         if self.cfg.MODEL.MODEL_NAME == "uem_basic":
             logger.warning("Using encoder.")
@@ -110,7 +115,7 @@ class UniEgoMotionBasic(nn.Module):
         # Overall, this will simulate recon and gen tasks with some probability.
 
         inp_shape = cond.shape
-        assert cond_type in ["traj"]
+        assert cond_type in ["traj", "text"]
         mask = torch.rand(cond.shape[0], device=cond.device) < self.cond_mask_prob[cond_type]  # B
         cond = mask_it(mask, cond, self.mask_tokens[cond_type])
 
@@ -148,6 +153,16 @@ class UniEgoMotionBasic(nn.Module):
             x = x + enc_traj
         else:
             x = x + self.mask_tokens["traj"]
+
+        # Text
+        if self.cfg.DATA.COND_TEXT_FEAT:
+            if "text_emb" in y:
+                text_mask = y["text_mask"] if "text_mask" in y else None
+                enc_text = self.embed_text_cond(y["text_emb"])  # B x D
+                enc_text = self.mask_cond(enc_text, "text", text_mask)  # B x D
+            else:
+                enc_text = self.mask_tokens["text"].view(1, -1).repeat(B, 1)  # B x D
+            enc_time = enc_time + enc_text
 
         if self.cfg.MODEL.MODEL_NAME == "uem_basic":
             x = self.pos_enc(x)  # B x T x D

@@ -89,8 +89,12 @@ def to_device(x, device):
     return recursive_apply(x, partial(_to_device_func, device=device))
 
 
-def print_dict(d, prefix=""):
+def print_dict(d, prefix="", max_num_items=10):
+    i = 0
     for k, v in d.items():
+        if i > max_num_items:
+            break
+        i += 1
         kk = prefix + (k if isinstance(k, str) else str(k))
         if isinstance(v, dict):
             print_dict(v, kk + "/")
@@ -104,10 +108,43 @@ def print_dict(d, prefix=""):
             print(kk, type(v))
 
 
+def deep_to_shallow_dict(d, delim="/"):
+    """Convert a deep dictionary to a shallow dictionary.
+    {"a": {"b": {"c": 1}}} -> {"a/b/c": 1}
+    """
+    ret = {}
+    for k, v in d.items():
+        assert delim not in k
+        if not isinstance(v, dict):
+            ret[k] = v
+        else:
+            vd = deep_to_shallow_dict(v, delim)
+            for kk, vv in vd.items():
+                ret[k + delim + kk] = vv
+    return ret
+
+
+def shallow_to_deep_dict(d, delim="/"):
+    """Convert a shallow dictionary to a deep dictionary.
+    {"a/b/c": 1} -> {"a": {"b": {"c": 1}}}
+    """
+    ret = {}
+    for key, value in d.items():
+        parts = key.split(delim)
+        current = ret
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+        current[parts[-1]] = value
+    return ret
+
+
 def careful_collate_fn(batch):
+    batch = [deep_to_shallow_dict(item) for item in batch]
 
     # Avoid stacking certain keys
-    avoid_keys = []
+    avoid_keys = ["y/text_emb"]
     nonstack = {}
     avail_keys = list(batch[0].keys())
     for key in avail_keys:
@@ -116,4 +153,6 @@ def careful_collate_fn(batch):
 
     batch = default_collate(batch)
     batch.update(nonstack)
+
+    batch = shallow_to_deep_dict(batch)
     return batch

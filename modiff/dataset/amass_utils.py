@@ -4,6 +4,7 @@ import numpy as np
 from loguru import logger
 import glob
 import json
+import copy
 
 
 """
@@ -97,10 +98,11 @@ same_dataset_name_mapping = {
 }
 
 
-def amass_loop(ds_types, return_what, fix_fps, ignore_non_floor_seqs, verbose=True):
+def amass_loop(ds_types, return_what, fix_fps, ignore_non_floor_seqs, mirrored=False, verbose=True):
     assert return_what in ["seq_path", "bdata"]
+    mirror_prefix = "M_" if mirrored else ""
     for ds_type in ds_types:
-        for ds_path in glob.glob(f"{amass_root}/{ds_type}/*"):
+        for ds_path in glob.glob(f"{amass_root}/{mirror_prefix}{ds_type}/*"):
             for sub_path in glob.glob(f"{ds_path}/*"):
 
                 # ignore non-directories like .tar.gz2 or .zip or .txt files
@@ -151,6 +153,7 @@ def amass_loop(ds_types, return_what, fix_fps, ignore_non_floor_seqs, verbose=Tr
                     # return only sequence path if requested
                     if return_what == "seq_path":
                         yield seq_path
+                        continue
 
                     # load npz file
                     try:
@@ -240,6 +243,77 @@ def save_nframes_fps():
 
     with open(out_file, "w") as f:
         json.dump(out_dict, f)
+
+
+"""
+SMPLH and SMPLX have the same number of frames. FPS needs to be corrected for DFaust.
+Otherwise both are same.
+
+BMLhandball sequences in SMPLH are missing in SMPLX.
+Humanact12 dataset is not available in any smpl amass.
+Some CMU two actor sequences are missing in SMPLX.
+"""
+
+
+def replace_last_n(text, target, replacement, n):
+    parts = text.rsplit(target, n)
+    return replacement.join(parts)
+
+
+def smplh_key_to_smplx_key(smplh_key):
+    not_available_in_smplx = [
+        "humanact12/",  # humanact dataset is not available in any smpl amass
+        "BMLhandball/",
+        "CMU/18_19_Justin/",
+        "CMU/18_19_rory/",
+        "CMU/20_21_Justin1/",
+        "CMU/20_21_rory1/",
+        "CMU/22_23_Rory/",
+        "CMU/22_23_justin/",
+    ]
+    for k in not_available_in_smplx:
+        if k in smplh_key:
+            return None, None
+    smplx_gender = "n"
+    smplx_key = copy.deepcopy(smplh_key)
+    smplx_key = smplx_key.replace("smplh_g", "smplx_n")
+    smplx_key = smplx_key.replace(" ", "_")
+    # smplx_key = smplx_key.replace("_poses", "_stageii")
+    smplx_key = replace_last_n(smplx_key, "_poses", "_stageii", 1)
+    smplx_key = smplx_key.replace("BioMotionLab_NTroje", "BMLrub")
+    smplx_key = smplx_key.replace("Transitions_mocap/", "Transitions/")
+    smplx_key = smplx_key.replace("MPI_mosh/", "MoSh/")
+    smplx_key = smplx_key.replace("SSM_synced/", "SSM/")
+    smplx_key = smplx_key.replace("TCD_handMocap/", "TCDHands/")
+    smplx_key = smplx_key.replace("MPI_Limits/", "PosePrior/")
+    smplx_key = smplx_key.replace("MPI_HDM05/", "HDM05/")
+    smplx_key = smplx_key.replace("DFaust_67/", "DFaust/")
+    if "HUMAN4D/" in smplx_key or "DanceDB/" in smplx_key:
+        smplx_key = smplx_key.replace("smplx_n", "smplx_g")
+        smplx_gender = "g"
+    return smplx_key, smplx_gender
+
+
+def process_text_anns(text_anns):
+    # Process keys to match the format of the out_dict
+
+    def modify_key(key):
+        ds_name, sub_name, seq_name = key.split("/")[-3:]
+        if key.startswith("M/"):
+            seq_name = f"M_{seq_name}"
+        if seq_name.endswith("_poses"):
+            seq_name = seq_name[:-6]
+        if seq_name.endswith("_stageii"):
+            seq_name = seq_name[:-8]
+        return f"{ds_name}___{sub_name}___{seq_name}"
+
+    new_text_anns = {}
+    for key, ann in text_anns.items():
+        if "humanact12" in key:
+            continue
+        new_key = modify_key(key)
+        new_text_anns[new_key] = ann
+    return new_text_anns
 
 
 if __name__ == "__main__":

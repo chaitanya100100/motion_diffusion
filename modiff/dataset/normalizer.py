@@ -17,9 +17,10 @@ class Normalizer(torch.nn.Module):
         super().__init__()
         self.repre_type = cfg.DATA.REPRE_TYPE
         self.dataset_name = cfg.DATA.DATASET_NAME
+        self.window = cfg.DATA.WINDOW
         self.default_k = "traj" if cfg.MODEL.LEARN_TRAJ else "motion"
 
-        stats_path = f"/vision/u/chpatel/data/modiff/{self.repre_type}_{self.dataset_name}_stats.pt"
+        stats_path = f"/vision/u/chpatel/data/modiff/{self.repre_type}_{self.dataset_name}_w{self.window}_stats.pt"
         logger.info(f"Loading stats from {stats_path}")
         self.stats = torch.load(stats_path, weights_only=False)
 

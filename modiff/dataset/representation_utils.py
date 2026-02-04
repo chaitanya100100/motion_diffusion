@@ -9,8 +9,8 @@ from modiff.dataset.egoego_utils import local2global_pose, mat_ik_torch
 from modiff.dataset.smpl_utils import saved_sequence_to_full_sequence, pca_to_matrix, matrix_to_pca
 
 
-MOTION_DIM = {"v1_ait": 209, "v1_beta": 234, "v4_beta": 243, "v5_beta": 243}
-TRAJ_DIM = {"v1_ait": 9, "v1_beta": 9, "v4_beta": 18, "v5_beta": 18}
+MOTION_DIM = {"v1_ait": 209, "v1": 224, "v1_beta": 234, "v4": 233, "v4_beta": 243, "v5": 233, "v5_beta": 243}
+TRAJ_DIM = {"v1_ait": 9, "v1": 9, "v1_beta": 9, "v4": 18, "v4_beta": 18, "v5": 18, "v5_beta": 18}
 
 
 def foot_detect(kp3d):
@@ -60,6 +60,7 @@ def common_sequence_to_repre(aria_traj, smpl_params, kp3d, floor_height, smpl):
 
     # apply offset for floor height
     offset = torch.tensor([0, 0, floor_height]).float().to(aria_traj.device)
+    aria_traj_T = aria_traj_T.clone()
     aria_traj_T[:, :3, 3] = aria_traj_T[:, :3, 3] - offset
     kp3d = kp3d - offset
     smpl_params["transl"] = smpl_params["transl"] - offset
@@ -291,7 +292,7 @@ def repre_v1_beta_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset)
 # V4: Head trajectory is projected onto floor and encoded as residuals from previous frame. Rest
 # of the body pose is w.r.t floor-projected head trajectory.
 # ------------------------------------------------------------------------------------------------
-def sequence_to_repre_v4(aria_traj, smpl_params, kp3d, floor_height, smpl, canon_root_idx=23):  # 23 is leye
+def sequence_to_repre_v4(aria_traj, smpl_params, kp3d, floor_height, smpl, canon_root_idx=15):  # 23 is leye
     # Explanation of representations is at the top.
 
     global_T, feet_l, feet_r, aria_traj_T, smpl_params, left_hand_pca, right_hand_pca = common_sequence_to_repre(
@@ -301,6 +302,7 @@ def sequence_to_repre_v4(aria_traj, smpl_params, kp3d, floor_height, smpl, canon
 
     # Canonicalization of leye
     if canon_root_idx >= global_T.shape[1]:
+        raise
         leye_T = aria_traj_T.clone()
     else:
         leye_T = global_T[:, canon_root_idx]  # T x 4 x 4
@@ -382,6 +384,9 @@ def repre_v4_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset):
     if x is None:
         return aria_traj_T, None, None
 
+    if betas is None:
+        betas = torch.zeros(10, device=x.device, dtype=x.dtype)
+
     # Get body
     local_rottrans = x[:, :198].view(T, 22, 9)  # T x 22 x 9
     local_T = rot_trans_to_matrix(
@@ -444,6 +449,17 @@ def repre_v4_beta_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset)
 
 
 # ------------------------------------------------------------------------------------------------
+# V5: Same as v4 but pelvis centric instead of head centric.
+# ------------------------------------------------------------------------------------------------
+def sequence_to_repre_v5(aria_traj, smpl_params, kp3d, floor_height, smpl):
+    return sequence_to_repre_v4(aria_traj, smpl_params, kp3d, floor_height, smpl, canon_root_idx=0)
+
+
+def repre_v5_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset):
+    return repre_v4_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset)
+
+
+# ------------------------------------------------------------------------------------------------
 # V5_beta: Same as v4_beta but pelvis centric instead of head centric.
 # ------------------------------------------------------------------------------------------------
 def sequence_to_repre_v5_beta(aria_traj, smpl_params, kp3d, floor_height, smpl):
@@ -478,6 +494,8 @@ def sequence_to_repre(repre_type, *args, **kwargs):
         return sequence_to_repre_v4(*args, **kwargs)
     if repre_type == "v4_beta":
         return sequence_to_repre_v4_beta(*args, **kwargs)
+    if repre_type == "v5":
+        return sequence_to_repre_v5(*args, **kwargs)
     if repre_type == "v5_beta":
         return sequence_to_repre_v5_beta(*args, **kwargs)
     if repre_type == "v1_ait":
@@ -495,6 +513,8 @@ def repre_to_sequence(repre_type, *args, **kwargs):
         return repre_v4_to_sequence(*args, **kwargs)
     if repre_type == "v4_beta":
         return repre_v4_beta_to_sequence(*args, **kwargs)
+    if repre_type == "v5":
+        return repre_v5_to_sequence(*args, **kwargs)
     if repre_type == "v5_beta":
         return repre_v5_beta_to_sequence(*args, **kwargs)
     if repre_type == "v1_ait":
@@ -510,17 +530,17 @@ if __name__ == "__main__":
     from modiff.utils.vis_utils import visualize_sequence, save_video
     from modiff.dataset.representation_utils import sequence_to_repre
 
-    repre_type = "v1_ait"
+    repre_type = "v5"
     smpl = get_smpl("smplx_n")
     motion_data = torch.load(
-        "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_n_and_smplx_g.pt", weights_only=False
+        "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng_mM.pt", weights_only=False
     )
 
     # ------------------------------------------------------------------------------------------------
     # Get a segment
     # ------------------------------------------------------------------------------------------------
-    seq_name = list(motion_data.keys())[3000]
-    st = 50
+    seq_name = list(motion_data.keys())[11000]
+    st = 0
     en = st + 100
     floor_height = motion_data[seq_name]["floor_height"]
 
@@ -569,6 +589,20 @@ if __name__ == "__main__":
 
         imgs = visualize_sequence(aria_traj=aria_traj_T_from_pose, pred_aria_traj=aria_traj_T_centered, global_jpos=global_T[:, :, :3, 3], global_rotmat=global_T[:, :, :3, :3], mv_params=dict(add_floor=False))
         final_imgs = np.concatenate([final_imgs, imgs], axis=-2)
+    elif repre_type == "v4" or repre_type == "v5":
+        local_rottrans = x[:, :198].view(T, 22, 9)  # T x 22 x 9
+        local_T = rot_trans_to_matrix(rc.rotation_6d_to_matrix(local_rottrans[:, :, :6]), local_rottrans[:, :, 6:9])  # T x 22 x 4 x 4
+        delta_invtsfm_rottrans = x[:, 198 : 198 + 9]  # T x 9
+        delta_invtsfm_T = rot_trans_to_matrix(rc.rotation_6d_to_matrix(delta_invtsfm_rottrans[:, :6]), delta_invtsfm_rottrans[:, 6:9])  # T x 4 x 4
+        invtsfm_T = [delta_invtsfm_T[0]]
+        for i in range(1, T):
+            invtsfm_T.append(invtsfm_T[-1] @ delta_invtsfm_T[i])
+        invtsfm_T = torch.stack(invtsfm_T, dim=0)  # T x 4 x 4
+        global_T = invtsfm_T[:, None] @ local_T  # T x 22 x 4 x 4
+
+        imgs = visualize_sequence(global_rotmat=local_T[:, :, :3, :3], global_jpos=local_T[:, :, :3, 3], aria_traj=delta_invtsfm_T, pred_aria_traj=invtsfm_T)
+        final_imgs = np.concatenate([final_imgs, imgs], axis=-2)
+
     else:
         raise NotImplementedError
 

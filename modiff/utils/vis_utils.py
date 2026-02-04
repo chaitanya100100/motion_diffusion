@@ -6,6 +6,7 @@ import tempfile
 from tqdm.auto import tqdm
 import torch
 import subprocess
+from PIL import Image, ImageDraw, ImageFont
 
 from .torch_utils import to_numpy
 from .meshviewer import MeshViewer
@@ -376,6 +377,65 @@ def put_text_on_img(
     if isinstance(img_inp, torch.Tensor):
         img = torch.from_numpy(img).to(img_inp.dtype).to(img_inp.device)
     return img
+
+
+def put_text_on_img_pil(
+    img_inp,
+    text,
+    font_size=20,  # PIL uses pixel size, not scale
+    pos="top_left",  # Or (x, y) coordinates
+    text_color=(255, 255, 255),
+    text_color_bg=(0, 0, 0, 160),  # Supports RGBA for semi-transparent backgrounds
+    font_path="/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Ensure this path is correct for your OS
+    margin=4,
+):
+    # Handle Torch/Numpy conversion
+    is_torch = isinstance(img_inp, torch.Tensor)
+    if is_torch:
+        img_np = img_inp.detach().cpu().numpy()
+    else:
+        img_np = img_inp.copy()
+
+    # Handle Batching
+    if img_np.ndim == 4:
+        results = [put_text_on_img_pil(x, text, font_size, pos, text_color, text_color_bg, font_path) for x in img_np]
+        out = np.stack(results)
+        return torch.from_numpy(out).to(img_inp.device) if is_torch else out
+
+    img_pil = Image.fromarray(img_np)
+    draw = ImageDraw.Draw(img_pil, "RGBA")  # RGBA allows for transparent backgrounds
+
+    try:
+        font = ImageFont.truetype(font_path, font_size)
+    except:
+        print(f"Error loading font {font_path}. Using default font.")
+        font = ImageFont.load_default(font_size)
+
+    # multiline_textbbox gives us the total area the text will occupy
+    left, top, right, bottom = draw.multiline_textbbox((0, 0), text, font=font)
+    if isinstance(pos, str):
+        text_w = right - left
+        text_h = bottom - top
+        W, H = img_pil.size
+        pos = {
+            "top_left": (margin, margin),
+            "top_right": (W - text_w - margin, margin),
+            "bottom_left": (margin, H - text_h - margin),
+            "bottom_right": (W - text_w - margin, H - text_h - margin),
+        }[pos]
+    left, top, right, bottom = draw.multiline_textbbox(pos, text, font=font)
+
+    if text_color_bg is not None:
+        # Draw background rectangle with a small margin
+        draw.rectangle([left - 4, top - 4, right + 4, bottom + 4], fill=text_color_bg)
+
+    draw.multiline_text(pos, text, font=font, fill=text_color, spacing=4)
+
+    img_out = np.array(img_pil)
+
+    if is_torch:
+        return torch.from_numpy(img_out).to(img_inp.device)
+    return img_out
 
 
 def pad_filler(verts, nf):

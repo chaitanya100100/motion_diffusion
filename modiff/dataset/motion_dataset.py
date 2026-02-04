@@ -13,9 +13,9 @@ from torch.utils.data import Dataset, DataLoader
 from modiff.dataset.canonicalization import get_a_canonicalized_segment
 from modiff.dataset.representation_utils import repre_to_sequence, sequence_to_repre
 from modiff.dataset.smpl_utils import get_smpl, evaluate_smpl
-from modiff.utils.vis_utils import save_video, visualize_sequence, visualize_sequence_blender
+from modiff.utils.vis_utils import save_video, visualize_sequence, visualize_sequence_blender, put_text_on_img_pil
 from modiff.utils.torch_utils import careful_collate_fn, to_device, to_numpy, to_tensor
-from modiff.dataset.feats import ImageFeats
+from modiff.dataset.feats import ImageFeats, TextFeats
 
 
 class Motion_Dataset(Dataset):
@@ -29,8 +29,12 @@ class Motion_Dataset(Dataset):
         self.img_feat_type = cfg.DATA.IMG_FEAT_TYPE
         self.cond_betas = cfg.DATA.COND_BETAS
         self.dataset_name = cfg.DATA.DATASET_NAME
+        self.cond_text_feat = cfg.DATA.COND_TEXT_FEAT
+        self.text_encoder_name = cfg.DATA.TEXT_ENCODER_NAME
         if self.cond_betas:
             logger.warning("Conditioning on betas.")
+        if self.cond_text_feat:
+            logger.warning("Conditioning on text features.")
         assert self.split in ["train", "val"]
         assert self.img_feat_type in ["clip_all", "egovideo", "dinov2", "dinov2_reg"]
 
@@ -46,7 +50,7 @@ class Motion_Dataset(Dataset):
         self.load_motion_data()
 
     def load_amass_data(self):
-        processed_path = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_n_and_smplx_g.pt"
+        processed_path = self.cfg.DATA.AMASS_DATA_PATH
         logger.info(f"Loading {processed_path}.")
         self.motion_data = torch.load(processed_path, weights_only=False)
         val_datasets = ["Transitions_mocap", "Transitions", "HumanEva", "MPI_HDM05", "HDM05", "SFU", "MPI_mosh", "MoSh"]
@@ -57,6 +61,10 @@ class Motion_Dataset(Dataset):
                 self.seq_names.append(seq_name)
             elif self.split == "val" and db_name in val_datasets:
                 self.seq_names.append(seq_name)
+
+        if self.cond_text_feat:
+            self.text_feats = TextFeats(self.text_encoder_name)
+            self.text_feats.prepare_for_training(self.seq_names, self.window)
 
     def load_ee4d_data(self):
 
@@ -78,6 +86,9 @@ class Motion_Dataset(Dataset):
         else:
             raise ValueError(f"Invalid dataset name: {self.dataset_name}")
 
+        if self.cond_text_feat:
+            return
+
         self.idx_to_sidx_fidx = []
         for seq_idx, seq_name in enumerate(self.seq_names):
             T = self.motion_data[seq_name]["num_frames"]
@@ -89,6 +100,8 @@ class Motion_Dataset(Dataset):
         logger.info(f"Using {len(self.idx_to_sidx_fidx)} segments.")
 
     def __len__(self):
+        if self.cond_text_feat:
+            return len(self.text_feats)
         return len(self.idx_to_sidx_fidx)
 
     def pad_to_window(self, ret):
@@ -112,12 +125,24 @@ class Motion_Dataset(Dataset):
         return ret
 
     def __getitem__(self, idx):
+        if self.cond_text_feat:
+            seq_name, st, en, text = self.text_feats.idx_to_info[idx]
+            ret = self.get_from_seq_and_st(seq_name, st, idx, en)
+            ret["y"]["text_emb"] = self.text_feats.get_text_feat(text)
+            ret["misc"]["text"] = text
+            return ret
         sidx, st = self.idx_to_sidx_fidx[idx]
         seq_name = self.seq_names[sidx]
         return self.get_from_seq_and_st(seq_name, st, idx)
 
-    def get_from_seq_and_st(self, seq_name, st, idx):
-        en = min(st + self.window - 1, self.motion_data[seq_name]["num_frames"] - 1)
+    def get_from_seq_and_st(self, seq_name, st, idx, en=None):
+        if en is None:
+            en = min(st + self.window - 1, self.motion_data[seq_name]["num_frames"] - 1)
+        else:
+            # assert en <= self.motion_data[seq_name]["num_frames"] - 1
+            if en > self.motion_data[seq_name]["num_frames"] - 1:
+                logger.warning(f"{idx} {seq_name} {st} {en} {self.motion_data[seq_name]['num_frames']}")
+                en = self.motion_data[seq_name]["num_frames"] - 1
         floor_height = self.motion_data[seq_name]["floor_height"]
         # logger.warning(f"Sequence: {seq_name}, start index: {st}, end index: {en}")
 
@@ -202,3 +227,38 @@ class Motion_Dataset(Dataset):
             mdata["full_pose"].append(full_pose)
 
         return mdata if is_batch else {k: v[0] for k, v in mdata.items()}
+
+
+if __name__ == "__main__":
+    cfg = lambda: None
+    cfg.DATA = lambda: None
+    cfg.DATA.DATASET_NAME = "amass"
+    cfg.DATA.REPRE_TYPE = "v1"
+    cfg.DATA.COND_TEXT_FEAT = True
+    cfg.DATA.COND_IMG_FEAT = False
+    cfg.DATA.IMG_FEAT_TYPE = "dinov2"
+    cfg.DATA.COND_BETAS = False
+    cfg.DATA.COND_TRAJ = False
+    cfg.DATA.AMASS_DATA_PATH = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng_mM.pt"
+    cfg.DATA.WINDOW = 128
+    dataset = Motion_Dataset(split="train", cfg=cfg)
+    print(len(dataset))
+
+    while True:
+        i = np.random.randint(0, len(dataset) - 1)
+        sample = dataset[i]
+
+        mdata = dataset.repre_to_sequence(sample["misc"]["motion"], sample["misc"]["traj"], sample["y"]["valid_frames"])
+        text = sample["misc"]["text"]
+        aria_traj_T = mdata["aria_traj_T"]
+        verts = mdata["verts"]
+        kp3d = mdata["kp3d"]
+        faces = dataset.smpl.faces
+        imgs = visualize_sequence(aria_traj=aria_traj_T, global_jpos=kp3d, verts=verts, faces=faces)
+        imgs = put_text_on_img_pil(imgs, text)
+        for i in range(imgs.shape[0]):
+            imgs[i] = put_text_on_img_pil(imgs[i], f"{i}", pos="top_right")
+
+        seq_name = sample["misc"]["seq_name"]
+        st, en = sample["misc"]["start_idx"], sample["misc"]["end_idx"]
+        save_video(imgs[..., ::-1], f"{seq_name}___{st}___{en}", "/vision/u/chpatel/test/motion_diffusion", fps=10)

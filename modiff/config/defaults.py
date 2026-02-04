@@ -8,11 +8,14 @@ _C.DATA.BATCH_SIZE = 32
 _C.DATA.NUM_WORKERS = 4
 _C.DATA.WINDOW = 80  # Length of the motion sequence. At 10 fps, window of 80 is 8 seconds.
 _C.DATA.REPRE_TYPE = "v4_beta"  # motion representation type
+_C.DATA.COND_TEXT_FEAT = False  # whether to condition on text features
+_C.DATA.TEXT_ENCODER_NAME = None  # text encoder name
 _C.DATA.COND_IMG_FEAT = False  # whether to condition on image features
 _C.DATA.COND_TRAJ = True  # whether to condition on aria trajectory
 # whether to condition on betas. We do NOT condition on betas in the paper but rather predict them.
 _C.DATA.COND_BETAS = False
 _C.DATA.IMG_FEAT_TYPE = "dinov2"  # image feature type if conditioning on image features
+_C.DATA.AMASS_DATA_PATH = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng.pt"
 
 _C.MODEL = CN()
 _C.MODEL.CKPT_PATH = None

@@ -8,6 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 
 from modiff.model.uniegomotion import UniEgoMotion
 from modiff.model.uniegomotion_basic import UniEgoMotionBasic
+from modiff.model.uniegomotion_dec import UniEgoMotionDec
 from modiff.model.uniegomotion_basic_latentcond import UniEgoMotionBasicLatentCond, MotionEncoder
 
 from modiff.module.utils import cfg_to_dict, create_gaussian_diffusion
@@ -34,6 +35,8 @@ class UEM_Module(pl.LightningModule):
             self.model = UniEgoMotion(self.cfg)
         elif self.model_name == "uem_basic" or self.model_name == "uem_unet":
             self.model = UniEgoMotionBasic(self.cfg)
+        elif self.model_name == "uem_dec":
+            self.model = UniEgoMotionDec(self.cfg)
         elif self.model_name == "uem_basic_latentcond":
             self.model = UniEgoMotionBasicLatentCond(self.cfg)
             self.motion_encoder = MotionEncoder(self.cfg)

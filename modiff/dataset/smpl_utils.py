@@ -11,7 +11,8 @@ def get_smpl(smpl_type="smplx_n"):
     logger.warning(f"Loading SMPL model: {smpl_type}")
     assert smpl_type in ["smplx_n"]
     smpl_type, gender = {
-        "smplx_n": ("smplx", "NEUTRAL"),
+        "smplx_n": ("smplx", "neutral"),
+        "smpl_n": ("smpl", "neutral"),
     }[smpl_type]
 
     # Load SMPL
@@ -31,7 +32,7 @@ def get_smpl(smpl_type="smplx_n"):
     return smpl
 
 
-def evaluate_smpl(smpl, smpl_params, max_parallel_smpl_evals=1000):
+def evaluate_smpl(smpl, smpl_params, max_parallel_smpl_evals=1000, ret_smpl_output=False):
     kp3d = []
     verts = []
     full_pose = []
@@ -57,7 +58,9 @@ def evaluate_smpl(smpl, smpl_params, max_parallel_smpl_evals=1000):
     kp3d = torch.cat(kp3d, dim=0)
     verts = torch.cat(verts, dim=0)
     full_pose = torch.cat(full_pose, dim=0)
-
+    if ret_smpl_output:
+        assert nf < bs
+        return kp3d, verts, full_pose, smpl_output
     return kp3d, verts, full_pose
 
 
