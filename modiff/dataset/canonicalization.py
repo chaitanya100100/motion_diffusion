@@ -17,7 +17,7 @@ def quaternion_between_vectors(v1, v2):
     dot_prod = torch.dot(v1, v2)
 
     # Construct the quaternion by concatenating the scalar and vector parts
-    q = torch.cat((torch.tensor([1.0 + dot_prod]), cross_prod))
+    q = torch.cat((torch.tensor([1.0 + dot_prod]).to(v1.device), cross_prod))
 
     # Normalize the quaternion
     q = q / torch.norm(q)
@@ -83,13 +83,13 @@ def rotation_to_make_this_forward(rotmat):
     rotq = rc.matrix_to_quaternion(rotmat)
 
     # Where will the vector (1, 0, 0) go after applying the rotation?
-    forward = rc.quaternion_apply(rotq, torch.tensor([1.0, 0, 0]))
+    forward = rc.quaternion_apply(rotq, torch.tensor([1.0, 0, 0]).to(rotmat.device))
     # Make it lie in the x-y plane
-    forward = torch.tensor([1.0, 1, 0]).float() * forward
+    forward = torch.tensor([1.0, 1, 0]).float().to(rotmat.device) * forward
     forward = forward / (torch.norm(forward) + 1e-8)
 
     # Compute the rotation that rotates it back to (1, 0, 0)
-    ret = rc.quaternion_invert(quaternion_between_vectors(torch.tensor([1.0, 0, 0]), forward))
+    ret = rc.quaternion_invert(quaternion_between_vectors(torch.tensor([1.0, 0, 0]).to(rotmat.device), forward))
     ret = rc.quaternion_to_matrix(ret)
 
     return ret

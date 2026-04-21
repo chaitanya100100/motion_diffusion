@@ -59,6 +59,7 @@ class PointCloudViewer:
         faces: np.ndarray,
         color: tuple = (0.7, 0.8, 1.0),
         static: bool = False,
+        wireframe: bool = False,
     ):
         vertices = self._standardize_input(vertices, static)
         faces = self._standardize_input(faces, True)
@@ -71,6 +72,7 @@ class PointCloudViewer:
             "color": color,
             "handles": [],
             "frame_nodes": [],
+            "wireframe": wireframe,
         }
 
     def add_trajectory(
@@ -294,6 +296,7 @@ class PointCloudViewer:
         vertices = item["vertices"] if t is None else item["vertices"][t]
         faces = item["faces"]
         color = item["color"]
+        wireframe = item["wireframe"]
 
         # if len(color) == len(vertices):
         #     import trimesh
@@ -302,7 +305,7 @@ class PointCloudViewer:
         #     handle = self.server.add_mesh_trimesh(path, trimesh_mesh)
         #     item["handles"].append(handle)
         #     return
-        handle = self.server.add_mesh_simple(path, vertices=vertices, faces=faces, color=color)
+        handle = self.server.add_mesh_simple(path, vertices=vertices, faces=faces, color=color, wireframe=wireframe)
         item["handles"].append(handle)
 
     def _render_trajectory_frame(self, path, item, t=None):

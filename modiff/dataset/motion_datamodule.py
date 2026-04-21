@@ -47,8 +47,8 @@ class Motion_DataModule(pl.LightningDataModule):
 
 def save_statistics():
     ds_name = "amass"
-    repre_type = "v5"
-    window = 128
+    repre_type = "v1"
+    window = 80
     out_file = f"/vision/u/chpatel/data/modiff/{repre_type}_{ds_name}_w{window}_stats.pt"
 
     if os.path.exists(out_file):
@@ -60,13 +60,17 @@ def save_statistics():
     cfg.DATA.DATASET_NAME = ds_name
     cfg.DATA.REPRE_TYPE = repre_type
     cfg.DATA.COND_IMG_FEAT = False
-    cfg.DATA.COND_TRAJ = False
+    cfg.DATA.COND_TRAJ = True
     cfg.DATA.WINDOW = window
     cfg.DATA.IMG_FEAT_TYPE = "clip_all"
     cfg.DATA.COND_BETAS = False
-    cfg.DATA.COND_TEXT_FEAT = True
+    cfg.DATA.COND_TEXT_FEAT = False
     cfg.DATA.TEXT_ENCODER_NAME = "clip_vitb32"
-    cfg.DATA.AMASS_DATA_PATH = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng_mM.pt"
+    cfg.DATA.AMASS_DATA_PATH = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng.pt"
+    # cfg.DATA.COND_TRAJ = False
+    # cfg.DATA.COND_TEXT_FEAT = True
+    # cfg.DATA.TEXT_ENCODER_NAME = "clip_vitb32"
+    # cfg.DATA.AMASS_DATA_PATH = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng_mM.pt"
     dataset = Motion_Dataset(split="train", cfg=cfg)
 
     all_motion = []

@@ -9,8 +9,26 @@ from modiff.dataset.egoego_utils import local2global_pose, mat_ik_torch
 from modiff.dataset.smpl_utils import saved_sequence_to_full_sequence, pca_to_matrix, matrix_to_pca
 
 
-MOTION_DIM = {"v1_ait": 209, "v1": 224, "v1_beta": 234, "v4": 233, "v4_beta": 243, "v5": 233, "v5_beta": 243}
-TRAJ_DIM = {"v1_ait": 9, "v1": 9, "v1_beta": 9, "v4": 18, "v4_beta": 18, "v5": 18, "v5_beta": 18}
+MOTION_DIM = {
+    "v1_ait": 209,
+    "v1": 224,
+    "v1f": 224,
+    "v1_beta": 234,
+    "v4": 233,
+    "v4_beta": 243,
+    "v5": 233,
+    "v5_beta": 243,
+}
+TRAJ_DIM = {
+    "v1_ait": 9,
+    "v1": 9,
+    "v1f": 9,
+    "v1_beta": 9,
+    "v4": 18,
+    "v4_beta": 18,
+    "v5": 18,
+    "v5_beta": 18,
+}
 
 
 def foot_detect(kp3d):
@@ -34,6 +52,28 @@ def foot_detect(kp3d):
     feet_l = vel_l * height_l
     feet_r = vel_r * height_r
     return feet_l, feet_r
+
+
+def get_aria_traj_T(global_T):
+    # Load ARIA trajectory
+    head_idx, leye_idx, reye_idx = 15, 23, 24
+    # global_pose = local2global_pose(full_pose, list(smpl.parents))
+    # aria_rot = global_pose[:, head_idx]  # T x 3 x 3 head rotation
+    # # aria_trans = kp3d[:, [leye_idx, reye_idx]].mean(1)  # T x 3 supposed aria translation
+    # aria_trans = kp3d[:, [head_idx]].mean(1)  # T x 3 supposed aria translation
+    # aria_traj_T = rot_trans_to_matrix(aria_rot, aria_trans)  # T x 4 x 4
+    aria_traj_T = global_T[:, head_idx]  # T x 4 x 4
+    return aria_traj_T
+
+
+def smpl_params_to_global_T(smpl_params, smpl):
+    from modiff.dataset.smpl_utils import evaluate_smpl
+
+    kp3d, verts, full_pose = evaluate_smpl(smpl, smpl_params)
+    global_rotmat = local2global_pose(full_pose[:, :22], list(smpl.parents)[:22])
+    global_trans = kp3d[:, :22]
+    global_T = rot_trans_to_matrix(global_rotmat, global_trans)  # T x 22 x 4 x 4
+    return global_T
 
 
 # ------------------------------------------------------------------------------------------------
@@ -226,6 +266,14 @@ def sequence_to_repre_v1(aria_traj, smpl_params, kp3d, floor_height, smpl):
     return x, aria_traj_repre
 
 
+def sequence_to_repre_v1f(aria_traj, smpl_params, kp3d, floor_height, smpl):
+    x, aria_traj_repre = sequence_to_repre_v1(aria_traj, smpl_params, kp3d, floor_height, smpl)
+
+    fh = aria_traj_repre[0, -1]
+    aria_traj_repre[:, -1] = aria_traj_repre[:, -1] - fh
+    return x, aria_traj_repre
+
+
 def repre_v1_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset):
     # Explanation of representations is at the top.
     T = aria_traj_repre.shape[0] if aria_traj_repre is not None else x.shape[0]
@@ -264,6 +312,10 @@ def repre_v1_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset):
     j3d = global_trans
 
     return aria_traj_T, smpl_params, j3d
+
+
+def repre_v1f_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset):
+    return repre_v1_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset)
 
 
 # ------------------------------------------------------------------------------------------------
@@ -423,6 +475,8 @@ def repre_v4_to_sequence(x, aria_traj_repre, smpl, betas, body_root_offset):
     smpl_params["transl"] = global_trans[:, 0] - body_root_offset[None]  # T x 3
 
     j3d = global_trans
+    if aria_traj_T is None:
+        aria_traj_T = get_aria_traj_T(global_T)
     return aria_traj_T, smpl_params, j3d
 
 
@@ -488,6 +542,8 @@ def sequence_to_repre(repre_type, *args, **kwargs):
     # Explanation of representations is at the top.
     if repre_type == "v1":
         return sequence_to_repre_v1(*args, **kwargs)
+    if repre_type == "v1f":
+        return sequence_to_repre_v1f(*args, **kwargs)
     if repre_type == "v1_beta":
         return sequence_to_repre_v1_beta(*args, **kwargs)
     if repre_type == "v4":
@@ -507,6 +563,8 @@ def repre_to_sequence(repre_type, *args, **kwargs):
     # Explanation of representations is at the top.
     if repre_type == "v1":
         return repre_v1_to_sequence(*args, **kwargs)
+    if repre_type == "v1f":
+        return repre_v1f_to_sequence(*args, **kwargs)
     if repre_type == "v1_beta":
         return repre_v1_beta_to_sequence(*args, **kwargs)
     if repre_type == "v4":
@@ -530,7 +588,7 @@ if __name__ == "__main__":
     from modiff.utils.vis_utils import visualize_sequence, save_video
     from modiff.dataset.representation_utils import sequence_to_repre
 
-    repre_type = "v5"
+    repre_type = "v1f"
     smpl = get_smpl("smplx_n")
     motion_data = torch.load(
         "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng_mM.pt", weights_only=False
@@ -573,7 +631,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------------------------
     x, aria_traj_repre = sequence_to_repre(repre_type, seg_data["can_aria_traj"], seg_data["can_smpl_params"], seg_data["can_kp3d"], floor_height, smpl)
 
-    if repre_type == "v1":
+    if repre_type == "v1" or repre_type == "v1f":
         global_rottrans = x[:, :198].view(T, 22, 9)  # T x 22 x 9
         global_T = rot_trans_to_matrix(rc.rotation_6d_to_matrix(global_rottrans[:, :, :6]), global_rottrans[:, :, 6:9])  # T x 22 x 4 x 4
         aria_traj_T = rot_trans_to_matrix(rc.rotation_6d_to_matrix(aria_traj_repre[:, :6]), aria_traj_repre[:, 6:9])

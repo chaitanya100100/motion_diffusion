@@ -163,6 +163,7 @@ class TextFeats(object):
         for i in tqdm(range(0, len(texts), bs)):
             texts_batch = texts[i : i + bs]
             feats = self.encode_text(model, texts_batch, device)
+            feats = feats.detach().cpu()
             out_dict["feats"].append(feats)
 
             for t in texts_batch:
@@ -213,15 +214,13 @@ class TextFeats(object):
             batched = False
         if self.text_encoder_name == "clip_vitb32":
             tokens = clip.tokenize(texts, truncate=True).to(device)
-            feats = model.encode_text(tokens)
-            feats = feats.detach().cpu()  # B x D
+            feats = model.encode_text(tokens)  # B x D
         elif self.text_encoder_name == "distilbert":
             text_model, tokenizer = model
             assert len(texts) == 1
             encoded_inputs = tokenizer(texts, return_tensors="pt", padding=True)
             feats = text_model(**encoded_inputs.to(device)).last_hidden_state  # B x T x D
             assert torch.all(encoded_inputs.attention_mask.to(dtype=bool))
-            feats = feats.detach().cpu()
         if not batched:
             feats = feats[0]
         return feats

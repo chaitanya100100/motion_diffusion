@@ -1,0 +1,22 @@
+DATA:
+  DATASET_NAME: amass
+  REPRE_TYPE: v1  # betas are inferred
+  COND_BETAS: False  # betas are not provided as condition input
+  COND_IMG_FEAT: False
+  COND_TRAJ: True
+  WINDOW: 80
+  IMG_FEAT_TYPE: dinov2  # Not used here
+  BATCH_SIZE: 128
+  NUM_WORKERS: 8
+
+MODEL:
+  MODEL_NAME: uem_basic
+  MODEL_SIZE: small
+  DIFFUSION_STEPS: 100
+
+TRAIN:
+  WEIGHT_DECAY: 0.01
+  LR: 1.e-4
+  NUM_EPOCHS: 100
+  SAVE_EVERY_N_EPOCHS: 10
+  CHECK_VAL_EVERY_N_EPOCHS: 5

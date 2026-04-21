@@ -34,8 +34,14 @@ class T2MViewer(PointCloudViewer):
         # get floor
         from modiff.utils.meshviewer import get_checkerboard_floor
 
-        floor = get_checkerboard_floor(cam_up=[0.0, 0.0, 1.0])
-        self.add_mesh("floor", floor.vertices, floor.faces, static=True)
+        # floor = get_checkerboard_floor(cam_up=[0.0, 0.0, 1.0])
+        # self.add_mesh("floor", floor.vertices, floor.faces, color=[0.7, 0.7, 0.7], static=True, wireframe=True)
+        grid = self.server.scene.add_grid(
+            "grid",
+            width=20.0,
+            height=20.0,
+            position=np.array([0.0, 0.0, 0.0]),
+        )
 
     def add_model_interface(self, predict_fn):
         with self.server.add_gui_folder("Model Inference"):
