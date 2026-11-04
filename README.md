@@ -30,6 +30,10 @@ EgoMo3R's motion prior (`configs/amass_v1_ait_unet.yaml`) is a 1D temporal UNet 
 motion (`v1_ait` representation) from a head trajectory. The trajectory is centered on its first frame, so no floor
 or gravity is needed.
 
+> If you came here to run the **full EgoMo3R pipeline** (joint motion and scene reconstruction from an egocentric
+> video), set up this repository first and then follow the README of
+> [chaitanya100100/EgoMo3R](https://github.com/chaitanya100100/EgoMo3R), which installs into this same environment.
+
 1. **SMPL-X.** Register at https://smpl-x.is.tue.mpg.de and put `SMPLX_NEUTRAL.npz` at
    `data/smpl_data/smplx/SMPLX_NEUTRAL.npz`.
 2. **Checkpoint and normalization statistics** from
