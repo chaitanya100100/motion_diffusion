@@ -57,7 +57,7 @@ This generates motion for an example 8 s head trajectory (`assets/example_head_t
 position error of about 2.5 cm. `modiff/run/sanity_check.py` is also a minimal example of how to use the prior:
 `UEM_Module.from_pretrained`, then `model.sample` for 80-frame windows or `model.sample_long` for any length.
 
-## Training EgoMo3R's motion prior
+## Training EgoMo3R's motion prior yourself
 
 The prior is trained on the AMASS SMPL-X N and SMPL-X G subsets at 10 fps with zero betas. Download both from
 https://amass.is.tue.mpg.de and extract them as `$AMASS/smplx_n/<dataset>/...` and `$AMASS/smplx_g/<dataset>/...`.
