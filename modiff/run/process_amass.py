@@ -104,6 +104,7 @@ def process_data():
     mirror_prefix = "M_" if args.mirrored else ""
     out_file = (
         f"{args.out_dir}/amass_"
+        f"{args.out_fps}fps_"
         f"{args.smpl_type}"
         f"{'_zerobeta' if args.zero_beta else ''}"
         f"_from_"
@@ -197,12 +198,10 @@ def merge_datasets():
     # out_path = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng.pt"
 
     ds_paths = [
-        "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_n.pt",
-        "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_M_smplx_n.pt",
-        "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_g.pt",
-        "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_M_smplx_g.pt",
+        "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_M_smplx_n.pt",
+        "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_smplx_n.pt",
     ]
-    out_path = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng_mM.pt"
+    out_path = "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_mM_smplx_n.pt"
     assert not os.path.exists(out_path)
 
     def modify_key_for_mirrored(key):
@@ -352,7 +351,7 @@ def visualize_with_text_anns():
 if __name__ == "__main__":
     # process_data()
     # visualize_data()
-    # merge_datasets()
+    merge_datasets()
     # text_anns_smplh_to_smplx()
-    visualize_with_text_anns()
+    # visualize_with_text_anns()
     pass  # # fmt: skip

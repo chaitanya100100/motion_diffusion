@@ -177,7 +177,12 @@ class UniEgoMotionBasic(nn.Module):
         elif self.cfg.MODEL.MODEL_NAME == "uem_unet":
             x = einops.rearrange(x, "b t d -> t b d")
             bT = int(np.ceil(T / 16)) * 16
-            x = torch.nn.functional.pad(x, (0, 0, 0, 0, 0, bT - T), value=0)
+            # Replicate the last frame rather than padding with zeros: zeros are far
+            # off-distribution in the 512-d latent and the conv stack bleeds them back
+            # into the real tail. No-op when T is a multiple of 16, which is the case
+            # for every trained config (WINDOW 80 and 128), so existing behavior is
+            # unchanged -- this only matters for the long-sequence sampling path.
+            x = torch.cat([x, x[-1:].expand(bT - T, -1, -1)], dim=0)
             x = self.unet.forward(x, enc_time)
             x = x[:T]
             x = einops.rearrange(x, "t b d -> b t d")

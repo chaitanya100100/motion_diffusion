@@ -153,6 +153,17 @@ class UEM_Module(pl.LightningModule):
             x = self.normalizer.denormalize(x, None)
             return x
 
+    def sample_long(self, aria_traj_T, **kwargs):
+        """Generate a motion longer than cfg.DATA.WINDOW from a long head trajectory.
+
+        Thin delegation to modiff.module.long_sample.sample_long -- see there for
+        the modes and options. Imported lazily so this module's import graph is
+        unchanged. Returns (motion: T x 209, info).
+        """
+        from modiff.module.long_sample import sample_long
+
+        return sample_long(self, aria_traj_T, **kwargs)
+
     @classmethod
     def from_pretrained(cls, exp_path):
         from modiff.config.defaults import get_cfg_defaults

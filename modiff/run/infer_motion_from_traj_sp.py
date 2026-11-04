@@ -58,10 +58,18 @@ def frame_switch_traj(A):
     return A
 
 
+"""
+python run/infer_uem_sp.py CONFIG ./config/uem_notraj_recon.yaml TRAIN.EXP_PATH ./exp/uem_v4b_dinov2_notraj_recon/ MODEL.CKPT_PATH last_ckpt
+
+"""
+
+
 def main():
     visualize = False
     sp_dataset_name = "egoexo4d"
+    subset_type = "naive_selection"
     traj_from = "egoego_T_hn"
+    traj_from = "egoego_T_gn_gt_scaled"
 
     device = torch.device("cuda")
     use_blender = False
@@ -78,10 +86,12 @@ def main():
 
     # Setup output
     if visualize:
-        out_dir = f"{cfg.TRAIN.EXP_PATH}/sp_{sp_dataset_name}_trajfrom_{traj_from}_vis{cfg.TRAIN.EVAL_SUFFIX}"
+        out_dir = (
+            f"{cfg.TRAIN.EXP_PATH}/sp_{sp_dataset_name}_{subset_type}_trajfrom_{traj_from}_vis{cfg.TRAIN.EVAL_SUFFIX}"
+        )
         os.makedirs(out_dir, exist_ok=True)
     else:
-        out_path = f"{cfg.TRAIN.EXP_PATH}/sp_{sp_dataset_name}_trajfrom_{traj_from}_preds{cfg.TRAIN.EVAL_SUFFIX}.pt"
+        out_path = f"{cfg.TRAIN.EXP_PATH}/sp_{sp_dataset_name}_{subset_type}_trajfrom_{traj_from}_preds{cfg.TRAIN.EVAL_SUFFIX}.pt"
 
     if os.path.exists(out_path):
         logger.error(f"Predictions already exist at {out_path}. Skipping.")
@@ -107,7 +117,9 @@ def main():
     logger.warning(f"Using representation type {repre_type} on trajectory")
 
     if traj_from.startswith("egoego_T"):
-        egoego_preds = torch.load(f"/vision/u/chpatel/UniEgoMotion/exp/myegoego/{sp_dataset_name}_preds.pt")
+        egoego_preds = torch.load(
+            f"/vision/u/chpatel/UniEgoMotion/exp/myegoego/{sp_dataset_name}_{subset_type}_preds.pt"
+        )
     # ------------------------------------------------------------
 
     # Dataset
@@ -115,10 +127,7 @@ def main():
 
     # Load sample names
     sp_data_dir = "/vision/u/chpatel/data/spatialmotion"
-    fname = {
-        "egoexo4d": "sample_names_egoexo4d_val_hard_selection.txt",
-        "nymeria": "sample_names_nymeria_val.txt",
-    }[sp_dataset_name]
+    fname = f"sample_names_{sp_dataset_name}_val_{subset_type}.txt"
     with open(f"{sp_data_dir}/{fname}", "r") as f:
         sp_seq_names = f.read().splitlines()
 
@@ -148,6 +157,8 @@ def main():
             aria_traj_T = frame_switch_traj(extrinsics_list)
         elif traj_from in ["egoego_T_hn", "egoego_T_gn_gt_scaled"]:
             aria_traj_T = egoego_preds[seq_name][traj_from.replace("egoego_", "")]
+            # nan to num
+            aria_traj_T = torch.nan_to_num(aria_traj_T)
         else:
             raise ValueError(f"Trajectory from {traj_from} not supported")
 
