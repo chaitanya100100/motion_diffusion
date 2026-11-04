@@ -2,13 +2,13 @@ import argparse
 import os
 
 import numpy as np
-from pandas.core.api import bdate_range
 import torch
 from loguru import logger
 from tqdm.auto import tqdm
 import glob
 import json
 
+import modiff.dataset.amass_utils as amass_utils
 from modiff.dataset.amass_utils import amass_root, amass_loop, smplh_key_to_smplx_key, process_text_anns
 import modiff.utils.rotation_conversions as rc
 from modiff.dataset.canonicalization import rot_trans_to_matrix
@@ -25,6 +25,7 @@ from modiff.utils.torch_utils import to_tensor
 
 def get_args():
     parser = argparse.ArgumentParser()
+    # TODO: paths in this file are on our cluster. If you want to preprocess AMASS, set them to your own paths.
     parser.add_argument("--amass_root", type=str, default="/vision/u/chpatel/data/amass/")
     parser.add_argument("--smpl_type", type=str, default="smplx_n", choices=["smplx_n"])
     parser.add_argument("--mirrored", action="store_true", help="Work with mirrored sequences.")
@@ -99,6 +100,7 @@ def main(bdata, smpl, out_fps, min_seg_len, zero_beta):
 def process_data():
     args = get_args()
     print(vars(args))
+    amass_utils.amass_root = args.amass_root  # amass_loop reads the AMASS root from amass_utils
 
     out_dict = {}
     mirror_prefix = "M_" if args.mirrored else ""
@@ -190,18 +192,19 @@ def visualize_data():
         save_video(imgs[..., ::-1], f"{ds_name}___{sub_name}___{seq_name}", viz_dir, fps=10)
 
 
-def merge_datasets():
+def merge_datasets(ds_paths=None, out_path=None):
     # ds_paths = [
     #     "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_n.pt",
     #     "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_g.pt",
     # ]
     # out_path = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng.pt"
 
-    ds_paths = [
-        "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_M_smplx_n.pt",
-        "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_smplx_n.pt",
-    ]
-    out_path = "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_mM_smplx_n.pt"
+    if ds_paths is None:
+        ds_paths = [
+            "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_M_smplx_n.pt",
+            "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_smplx_n.pt",
+        ]
+        out_path = "/vision/u/chpatel/data/modiff/amass_10fps_smplx_n_from_mM_smplx_n.pt"
     assert not os.path.exists(out_path)
 
     def modify_key_for_mirrored(key):

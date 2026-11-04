@@ -102,6 +102,7 @@ class TextFeats(object):
     def __init__(self, text_encoder_name):
         self.text_encoder_name = text_encoder_name
         assert text_encoder_name in ["clip_vitb32", "distilbert"]
+        # TODO: paths on our cluster. If you want to use text features, set them to your own paths.
         self.text_anns_path = "/vision/u/chpatel/data/modiff/babel_humanml3d_kitml_with_mirror_smplx.json"
         self.text_anns = None
         self.preencoded_feats_path = f"/vision/u/chpatel/data/modiff/text_feats_{text_encoder_name}_bhk_with_mirror.pt"

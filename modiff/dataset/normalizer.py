@@ -1,3 +1,4 @@
+import os
 import torch
 from loguru import logger
 
@@ -20,7 +21,8 @@ class Normalizer(torch.nn.Module):
         self.window = cfg.DATA.WINDOW
         self.default_k = "traj" if cfg.MODEL.LEARN_TRAJ else "motion"
 
-        stats_path = f"/vision/u/chpatel/data/modiff/{self.repre_type}_{self.dataset_name}_w{self.window}_stats.pt"
+        stats_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../data/processed")
+        stats_path = f"{stats_dir}/{self.repre_type}_{self.dataset_name}_w{self.window}_stats.pt"
         logger.info(f"Loading stats from {stats_path}")
         self.stats = torch.load(stats_path, weights_only=False)
 

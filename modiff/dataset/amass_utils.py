@@ -20,6 +20,7 @@ SMPLX DFaust says 120fps but SMPLH DFaust says 60fps for all sequences.
 """
 
 
+# TODO: path on our cluster. If you want to use this, set it to your own path.
 amass_root = "/vision/u/chpatel/data/amass/"
 
 smplh_g_dataset_names = [

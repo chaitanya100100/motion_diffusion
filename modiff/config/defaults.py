@@ -15,6 +15,7 @@ _C.DATA.COND_TRAJ = True  # whether to condition on aria trajectory
 # whether to condition on betas. We do NOT condition on betas in the paper but rather predict them.
 _C.DATA.COND_BETAS = False
 _C.DATA.IMG_FEAT_TYPE = "dinov2"  # image feature type if conditioning on image features
+# TODO: path on our cluster. If you want to use this, set it to your own path.
 _C.DATA.AMASS_DATA_PATH = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng.pt"
 
 _C.MODEL = CN()

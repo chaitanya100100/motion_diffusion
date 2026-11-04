@@ -9,7 +9,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 from modiff.model.uniegomotion import UniEgoMotion
 from modiff.model.uniegomotion_basic import UniEgoMotionBasic
 from modiff.model.uniegomotion_dec import UniEgoMotionDec
-from modiff.model.uniegomotion_basic_latentcond import UniEgoMotionBasicLatentCond, MotionEncoder
 
 from modiff.module.utils import cfg_to_dict, create_gaussian_diffusion
 from modiff.mydiffusion.resample import create_named_schedule_sampler
@@ -37,9 +36,6 @@ class UEM_Module(pl.LightningModule):
             self.model = UniEgoMotionBasic(self.cfg)
         elif self.model_name == "uem_dec":
             self.model = UniEgoMotionDec(self.cfg)
-        elif self.model_name == "uem_basic_latentcond":
-            self.model = UniEgoMotionBasicLatentCond(self.cfg)
-            self.motion_encoder = MotionEncoder(self.cfg)
         else:
             raise ValueError(f"Unknown model name {self.model_name}")
 
@@ -87,9 +83,6 @@ class UEM_Module(pl.LightningModule):
             batch["y"]["traj"] = self.normalizer.normalize(batch["y"]["traj"], "traj")
         x = batch["misc"]["traj"] if self.learn_traj else batch["misc"]["motion"]
         x = self.normalizer.normalize(x, None)
-
-        if self.model_name == "uem_basic_latentcond":
-            batch["y"]["semcode"] = self.motion_encoder(x, batch["y"]["valid_frames"])
 
         t, weights = self.schedule_sampler.sample(x.shape[0], self.device)
         losses = self.diffusion.training_losses(self.model, x, t, model_kwargs={"y": batch["y"]})

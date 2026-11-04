@@ -1,3 +1,4 @@
+import os
 from loguru import logger
 import smplx
 import torch
@@ -7,7 +8,7 @@ import modiff.utils.rotation_conversions as rc
 
 def get_smpl(smpl_type="smplx_n"):
 
-    smpl_path = "/vision/u/chpatel/smpl_data"  # TODO: change this to your own path
+    smpl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../data/smpl_data")  # expects smpl_data/smplx/SMPLX_NEUTRAL.npz
     logger.warning(f"Loading SMPL model: {smpl_type}")
     assert smpl_type in ["smplx_n"]
     smpl_type, gender = {

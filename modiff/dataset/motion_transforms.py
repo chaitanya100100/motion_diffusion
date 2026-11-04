@@ -143,11 +143,7 @@ def window_taper_weights(window, taper, eps=1e-2, device=None, dtype=torch.float
 def align_se3_trajectories(X, Y, alpha=0.1, with_scale=False):
     """Estimate ``A`` (4x4) such that ``A @ Y_t`` best matches ``X_t``.
 
-    Same closed-form blend of translation and rotation energies as
-    ``align_trajectories_translation_first`` in
-    ``modiff/run/infer_motion_from_traj_sp.py``. It is duplicated here rather than
-    imported because that module pulls in the Blender/render helpers at import
-    time, which we do not want in the sampling path.
+    Closed-form blend of translation and rotation energies.
 
     :param X: ``(T, 4, 4)`` target poses.
     :param Y: ``(T, 4, 4)`` source poses.

@@ -68,6 +68,7 @@ class Motion_Dataset(Dataset):
 
     def load_ee4d_data(self):
 
+        # TODO: path on our cluster. If you want to use this, set it to your own path.
         ee4d_dir = "/vision/group/egoexo4d/"
         processed_path = f"{ee4d_dir}/uniegomotion/ee_{self.split}.pt"
         logger.info(f"Loading {processed_path}.")

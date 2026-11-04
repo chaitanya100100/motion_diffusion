@@ -1,17 +1,23 @@
-# My exact environment
+# Exact versions of the environment this code was developed and tested with (python 3.10).
+torch==2.7.1
+pytorch-lightning==2.4.0
+numpy==2.2.6
 loguru==0.7.3
-yacs
-IPython
-matplotlib
-scikit-learn==1.14.1
-joblib==1.4.2
-smplx
-trimesh==4.5.3
-opencv-python==4.11.0
+yacs==0.1.8
+tqdm==4.65.2
+einops==0.8.1
+smplx==0.1.28
+scikit-learn==1.7.1
+scipy==1.15.3
+matplotlib==3.10.3
+ipython==8.37.0
+ipdb==0.13.13
+transformers==4.57.1
+clip==1.0  # git+https://github.com/openai/CLIP.git
+trimesh==4.7.1
 pyrender==0.1.45
-ipdb
-einops==0.8.0
-blendify==2.0.0
-pandas==2.2.3
-projectaria_tools==1.6.0
-av==14.0.1
+pyglet==2.1.6
+opencv-python==4.12.0.88
+pillow==12.2.0
+viser==1.0.24
+blendify==2.0.1

@@ -39,7 +39,6 @@ only carry yaw and XY -- tilt and height are not encoded in them at all and get
 synchronized for free by the cross-window fusion.
 """
 
-from lightning_fabric.plugins.precision.amp import Module
 import torch
 from loguru import logger
 
@@ -100,9 +99,7 @@ def _as_traj_T(aria_traj_T):
 def traj_repre_from_T(traj_T):
     """``T x 4 x 4`` head poses -> ``T x 9`` v1_ait conditioning.
 
-    Identical to the ``v1_ait`` branch of ``get_traj_repre_here`` in
-    ``modiff/run/infer_motion_from_traj_sp.py``. ``center_aria_traj`` makes this
-    relative to the window's own first frame, so it is invariant to whatever frame
+    ``center_aria_traj`` makes this relative to the window's own first frame, so it is invariant to whatever frame
     ``traj_T`` is expressed in.
     """
     centered = center_aria_traj(traj_T)
@@ -347,8 +344,7 @@ def sample_long(module, aria_traj_T, mode="multidiffusion", seed=None, cond_scal
         ``v1_ait`` tensor on the model's device, in a single canonical frame --
         feed it straight to
         ``repre_to_sequence(cfg.DATA.REPRE_TYPE, motion, None, smpl, None, None)``.
-        As in ``infer_motion_from_traj_sp.py``, the caller aligns the input
-        trajectory into that frame rather than the other way round.
+        The caller aligns the input trajectory into that frame rather than the other way round.
     """
     _check_repre(module)
     if seed is not None:

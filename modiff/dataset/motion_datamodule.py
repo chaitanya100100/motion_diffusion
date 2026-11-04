@@ -45,11 +45,16 @@ class Motion_DataModule(pl.LightningDataModule):
         )
 
 
-def save_statistics():
+def save_statistics(
+    repre_type="v1",
+    window=80,
+    # TODO: path on our cluster. If you want to use this, set it to your own path.
+    amass_data_path="/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng.pt",
+):
     ds_name = "amass"
-    repre_type = "v1"
-    window = 80
-    out_file = f"/vision/u/chpatel/data/modiff/{repre_type}_{ds_name}_w{window}_stats.pt"
+    # same location the Normalizer reads from
+    stats_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../data/processed")
+    out_file = f"{stats_dir}/{repre_type}_{ds_name}_w{window}_stats.pt"
 
     if os.path.exists(out_file):
         logger.info(f"{out_file} exists. Skipping.")
@@ -66,7 +71,7 @@ def save_statistics():
     cfg.DATA.COND_BETAS = False
     cfg.DATA.COND_TEXT_FEAT = False
     cfg.DATA.TEXT_ENCODER_NAME = "clip_vitb32"
-    cfg.DATA.AMASS_DATA_PATH = "/vision/u/chpatel/data/modiff/amass_smplx_n_zerobeta_from_smplx_ng.pt"
+    cfg.DATA.AMASS_DATA_PATH = amass_data_path
     # cfg.DATA.COND_TRAJ = False
     # cfg.DATA.COND_TEXT_FEAT = True
     # cfg.DATA.TEXT_ENCODER_NAME = "clip_vitb32"

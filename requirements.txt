@@ -1,0 +1,25 @@
+# Install PyTorch for your CUDA version first (https://pytorch.org), then: pip install -r requirements.txt
+torch
+pytorch-lightning
+numpy
+loguru
+yacs
+tqdm
+einops
+smplx
+scikit-learn
+scipy
+matplotlib
+IPython
+ipdb
+# text-to-motion (text encoders)
+transformers
+git+https://github.com/openai/CLIP.git
+# visualization
+trimesh
+pyrender
+pyglet
+opencv-python
+pillow
+viser
+blendify
